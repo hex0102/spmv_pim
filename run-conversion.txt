@@ -1,0 +1,3 @@
+twitter_combined.txt 2420766
+com-dblp.ungraph.txt 1049870
+roadNet-CA.txt 5533214
