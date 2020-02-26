@@ -7,18 +7,30 @@ import pandas as pd
 import matplotlib as mpl
 import concurrent.futures
 
+
+def collision_check(group_id):
+    j = group_id
+    col_group = packing_group[j]
+    col_group_rowidx = packing_group_entries[j]
+    confliced = 1
+    if len(np.intersect1d(current_col_ind, col_group_rowidx)) > 0:
+        return 1, 0
+    else:
+        return 0, len(col_group)
+
+
 # inputs: a csc matrix:
 # outputs: column groups:
 def column_packing(m_input):
     if not isinstance(m_input, csc_matrix):
         m_input = csc_matrix(m_input) # m.indices  m.data m.indptr
 
-    packing_group = []
-    packing_group_entries = []
+
     for i in range(len(m_input.indptr)-1):
 
         print(i)
         print(len(packing_group))
+        global current_col_ind
         current_col_ind = m_input.indices[m_input.indptr[i]: m_input.indptr[i+1]]
         flag = 0
         if len(packing_group) == 0:
@@ -26,11 +38,30 @@ def column_packing(m_input):
             packing_group_entries.append(current_col_ind)
             continue
 
-        # candidate_groups = np.zeros((1,2)) # first column (group id) | second column (n_cols in the group)
+        candidate_groups = [] # first column (group id) | second column (n_cols in the group)
 
-        # with concurrent.futures.ProcessPoolExecutor() as executor:
-        #    for out1, out2, out3 in executor.map(procedure, range(0, 10)):
+        n_group = len(packing_group)
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            for out1, out2 in executor.map(collision_check, range(n_group)):
+                candidate_groups.append([out1, out2])
+                pass
 
+        candidate_groups = np.asarray(candidate_groups)
+
+        if np.min(candidate_groups, axis=0)[0] == 1:
+            packing_group.append([i])
+            packing_group_entries.append(current_col_ind)
+        else:
+            possible_group_idx = np.where(candidate_groups[:, 0] == 0)
+            len_per_groups = candidate_groups[possible_group_idx, 1]
+            selected_idx = possible_group_idx[0][np.argmin(len_per_groups)]
+            if selected_idx.size > 1:
+                selected_idx = np.random.choice(selected_idx.size, 1, replace=False)
+            packing_group[selected_idx].append(i)
+            packing_group_entries[selected_idx] = np.concatenate((packing_group_entries[selected_idx], current_col_ind))
+
+
+        '''
         for j in range(len(packing_group)):
             col_group = packing_group[j]
             col_group_rowidx = packing_group_entries[j]
@@ -47,10 +78,8 @@ def column_packing(m_input):
         if flag == 0:
             packing_group.append([i])
             packing_group_entries.append(current_col_ind)
+        '''
 
-
-    pass
-    return packing_group
 
 
 
@@ -60,7 +89,8 @@ def fix_hist_step_vertical_line_at_end(ax):
         poly.set_xy(poly.get_xy()[:-1])
 
 
-
+packing_group = []
+packing_group_entries = []
 if __name__ == "__main__":
 
     #fig, ax = plt.subplots(figsize=(8, 4))
@@ -122,7 +152,8 @@ if __name__ == "__main__":
     plt.xlabel('row/col size')
     plt.show()
 
-    packing_group = column_packing(spmv_csc)
+
+    column_packing(spmv_csc)
 
     with open(output_filename, 'w+') as f:
         for i in range(len(packing_group)):
