@@ -28,8 +28,9 @@ def column_packing(m_input):
 
     for i in range(len(m_input.indptr)-1):
 
-        print(i)
-        print(len(packing_group))
+        if i%1000 == 0:
+            print(i)
+            print(len(packing_group))
         global current_col_ind
         current_col_ind = m_input.indices[m_input.indptr[i]: m_input.indptr[i+1]]
         flag = 0
